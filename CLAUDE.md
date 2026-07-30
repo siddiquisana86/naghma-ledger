@@ -41,9 +41,14 @@ added directly through the app or the Sheet itself.
   and `getSheetId` (looks up a tab's numeric `sheetId` by title, needed
   because `batchUpdate` addresses sheets by numeric id, not tab name).
 - `js/auth.js` — wraps Google Identity Services (`google.accounts.oauth2`
-  token client, scope `.../auth/spreadsheets`). Every exported function
-  branches on `CONFIG.USE_MOCK_DATA` first and short-circuits to local mock
-  state, so the whole auth flow can be exercised with zero real credentials.
+  token client, scope `.../auth/spreadsheets .../auth/userinfo.email
+  .../auth/userinfo.profile`). Every exported function branches on
+  `CONFIG.USE_MOCK_DATA` first and short-circuits to local mock state, so
+  the whole auth flow can be exercised with zero real credentials.
+  `getName()` (display name, falls back to email) and `getEmail()` both
+  read from the same `oauth2/v2/userinfo` response fetched once at
+  sign-in; adding `userinfo.profile` needed no Google Cloud Console
+  changes (same non-sensitive-scope territory as `userinfo.email`).
 - `js/ledger.js` — the data layer between the API and the UI: `loadLedger`,
   `addEntry`, `updateEntry`, `deleteEntry`, `addStudent`,
   `loadAccountSummary`, `updateOverallBalance`. Same mock-mode branch
@@ -60,6 +65,14 @@ added directly through the app or the Sheet itself.
   site.
 - `js/theme.js` — manual light/dark toggle layered on top of
   `prefers-color-scheme`, persisted in `localStorage`.
+- `js/icons.js` — every icon in the app (Feather Icons, MIT license)
+  inlined as SVG-string constants (`ICONS.edit`, `ICONS.trash`, etc.) so
+  there's no icon font or CDN dependency. Static, single-purpose buttons
+  (dialog close buttons, the FAB, the account-balance edit button) carry a
+  `data-icon="name"` attribute filled in by `main.js`'s
+  `renderStaticIcons()` at startup; dynamically-rendered content (the
+  per-row edit/delete buttons in `renderTxList()`, the theme toggle in
+  `theme.js`) interpolates `ICONS.x` directly since it's rebuilt anyway.
 
 **When `USE_MOCK_DATA` is `true`** (the current default), every write in
 `ledger.js`/`auth.js` mutates in-memory mock objects instead of calling the
@@ -117,6 +130,21 @@ rendered and in what order — they never write anything back to the Sheet
 or touch a row's `balance`, which stays whatever was computed from its
 actual position in the Sheet. Sorting by amount or grouping by type is
 purely a client-side re-arrangement for display.
+
+### Manual theme toggle must also pin `color-scheme`
+
+`styles.css`'s `:root` sets `color-scheme: light dark` so the OS/browser
+picks a default. But the manual theme toggle (`theme.js`, via
+`data-theme="light"|"dark"` on `<html>`) only overrides CSS custom
+properties — it doesn't affect native form-control rendering (a date
+input's calendar icon, number spinners, scrollbars) unless `color-scheme`
+is *also* pinned inside each `[data-theme]` override. Without that, a
+manually-chosen theme that disagrees with the OS preference leaves native
+controls rendered in the OS's scheme instead of the app's chosen one —
+this showed up as an invisible calendar icon (dark-style icon on a
+light-mode input). Any new `[data-theme]` block needs its own
+`color-scheme: light;`/`color-scheme: dark;` line, not just custom
+properties.
 
 ### Editable "Summary" fields are row-discovered by label, not by fixed row number
 

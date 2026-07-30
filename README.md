@@ -15,6 +15,9 @@ Live site: **https://siddiquisana86.github.io/naghma-ledger/**
 - **Add, edit, and delete entries** — record money received from a
   student, money spent for Naghma, or money transferred to her, with a
   simple form. Any signed-in account can edit or delete a past entry too.
+- **Search, sort, and filter** — search by name/notes/amount, sort by
+  date or amount (or group by type), and filter by entry type,
+  student/source, or a custom date range.
 - **Read-only view for Naghma** — no sign-in required to see the ledger
   and balance; only adding/editing/deleting requires signing in with
   Google.
