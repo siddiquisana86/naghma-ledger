@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A static, no-backend web app (`app/`) that replaces a manually-formatted Google
+A static, no-backend web app (repo root — deployed via GitHub Pages) that replaces a manually-formatted Google
 Sheet used to track tuition earnings for a family member. Google Sheets stays
 the durable source of truth; the app reads/writes it directly from the
 browser via the Sheets API v4 (no server, no database). See `SETUP.md` for
@@ -18,17 +18,17 @@ added directly through the app or the Sheet itself.
 
 ## Commands
 
-- `npx http-server app -p 8080 -c-1` — serve the app locally for manual
+- `npx http-server . -p 8080 -c-1` — serve the app locally for manual
   testing (open `http://localhost:8080`). The `-c-1` disables caching —
-  without it, edited `app/js/*.js` files can keep being served stale from
+  without it, edited `js/*.js` files can keep being served stale from
   the browser's HTTP cache across reloads, which looks exactly like a fix
-  "not working." There is no build step, bundler, or test suite — `app/` is
+  "not working." There is no build step, bundler, or test suite — this is
   plain HTML/CSS/JS loaded as native ES modules; verify changes by running
   the app in a browser.
 
 ## Architecture
 
-### `app/` module layering
+### Module layering
 
 - `js/config.js` — the only place holding `SPREADSHEET_ID`, `API_KEY`,
   `CLIENT_ID`, and the `USE_MOCK_DATA` flag. These credentials are meant to
@@ -79,7 +79,7 @@ last pre-filled row, nowhere near the real data — silently breaking the
 running balance. Don't reintroduce a pre-filled buffer; the row-parse-then-
 write approach here is the fix.
 
-### The `[hidden]` attribute in `app/styles.css`
+### The `[hidden]` attribute in `styles.css`
 
 Elements toggled via the HTML `hidden` attribute (dialogs, conditional form
 sections, toasts) must not also have an unconditional `display:

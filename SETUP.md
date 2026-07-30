@@ -41,7 +41,7 @@ Note the **Spreadsheet ID** from the Sheet's URL: `https://docs.google.com/sprea
 
 ## 6. Configure the app
 
-Edit `app/js/config.js`:
+Edit `js/config.js`:
 
 ```js
 export const CONFIG = {
@@ -52,13 +52,13 @@ export const CONFIG = {
 };
 ```
 
-To test locally before deploying: from the project root, run a static file server with caching disabled - **`npx http-server app -p 8080 -c-1`** (the `-c-1` matters: `http-server`'s default 1-hour cache header means the browser can keep serving an old cached `js/*.js` file after you edit it, even across page reloads, which looks like your change "isn't working"). Then open `http://localhost:8080`. Sign in with either your or Sana's Google account (must be a test user from step 2.2) and confirm entries save correctly to the real Sheet.
+To test locally before deploying: from the project root, run a static file server with caching disabled - **`npx http-server . -p 8080 -c-1`** (the `-c-1` matters: `http-server`'s default 1-hour cache header means the browser can keep serving an old cached `js/*.js` file after you edit it, even across page reloads, which looks like your change "isn't working"). Then open `http://localhost:8080`. Sign in with either your or Sana's Google account (must be a test user from step 2.2) and confirm entries save correctly to the real Sheet.
 
 ## 7. git, GitHub, and Pages
 
 1. `git init`, commit, and push to a GitHub repo.
 2. **The repo needs to be public for GitHub Pages to work**, unless the GitHub account is on a paid plan (Pro/Team/Enterprise) — Pages from a private repo isn't available on the free plan. This is fine: `config.js`'s Client ID and restricted API key are meant to be public in client-side code (see its comment); the real access boundary is the Google Sheet's own sharing settings, not repo secrecy.
-3. In the repo's **Settings > Pages**, set the source to deploy from the `app/` folder (or move `app/`'s contents to the repo root — either works, just keep `config.js` consistent with wherever it ends up).
+3. In the repo's **Settings > Pages**, set the source to deploy from branch `main`, folder `/` (root) — GitHub Pages' branch-deployment mode only supports `/` or `/docs`, not an arbitrary subfolder, which is why the app's files live at the repo root rather than under an `app/` folder.
 4. Once you have the live `https://<username>.github.io/...` URL, go back to Google Cloud Console and:
    - Add it to the OAuth Client's **Authorized JavaScript origins** (step 2.4).
    - Add it to the restricted API key's **HTTP referrers** (step 3.2).
