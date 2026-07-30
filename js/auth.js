@@ -1,5 +1,7 @@
 import { CONFIG } from './config.js';
 
+const SESSION_KEY = 'naghmaLedgerAuth';
+
 let tokenClient = null;
 let accessToken = null;
 let currentEmail = null;
@@ -16,6 +18,32 @@ export function getAccessToken() {
 export function getEmail() {
   if (CONFIG.USE_MOCK_DATA) return mockSignedIn ? 'demo@example.com (mock)' : null;
   return currentEmail;
+}
+
+// The access token itself lives only in memory (as before), but is mirrored
+// into sessionStorage so a page reload doesn't force a fresh sign-in - it's
+// short-lived (~1hr, enforced by Google) and scoped no wider than what the
+// in-memory token already grants, so persisting it for the tab's lifetime
+// doesn't change the app's security posture.
+function saveSession(expiresIn) {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+    accessToken, email: currentEmail, expiresAt: Date.now() + expiresIn * 1000,
+  }));
+}
+
+function loadSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (!session.accessToken || session.expiresAt <= Date.now()) {
+      sessionStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Google Identity Services must already be loaded (see index.html's
@@ -37,9 +65,17 @@ export function initAuth({ onSignedIn }) {
       }
       accessToken = resp.access_token;
       await fetchProfile();
+      saveSession(resp.expires_in);
       onSignedIn && onSignedIn();
     },
   });
+
+  const session = loadSession();
+  if (session) {
+    accessToken = session.accessToken;
+    currentEmail = session.email;
+    onSignedIn && onSignedIn();
+  }
 }
 
 export function signIn(onDone) {
@@ -66,6 +102,7 @@ export function signOut(onSignedOut) {
   }
   accessToken = null;
   currentEmail = null;
+  sessionStorage.removeItem(SESSION_KEY);
   onSignedOut && onSignedOut();
 }
 
