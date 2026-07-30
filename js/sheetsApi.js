@@ -55,3 +55,36 @@ export async function updateRange(range, values, accessToken) {
   }
   return res.json();
 }
+
+// Structural operations (deleting/moving rows or columns) that values.*
+// endpoints can't do - used for row deletion. Same auth/permission behavior
+// as appendRow/updateRange.
+export async function batchUpdate(requests, accessToken) {
+  const url = `${BASE}/${CONFIG.SPREADSHEET_ID}:batchUpdate`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ requests }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Sheets batchUpdate failed (${res.status}): ${body}`);
+  }
+  return res.json();
+}
+
+// Reads the Ledger tab's numeric sheetId, needed for batchUpdate's
+// deleteDimension (which addresses sheets by numeric id, not tab name).
+// No auth required - same public-read access as readRange.
+export async function getSheetId(sheetTitle) {
+  const url = `${BASE}/${CONFIG.SPREADSHEET_ID}` +
+    `?key=${CONFIG.API_KEY}&fields=sheets.properties(sheetId,title)`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Sheets metadata read failed: ${res.status}`);
+  const data = await res.json();
+  const sheet = (data.sheets || []).find(s => s.properties.title === sheetTitle);
+  return sheet ? sheet.properties.sheetId : null;
+}

@@ -130,6 +130,21 @@
   </div>
 </div>
 
+<div id="deleteDialogBackdrop" class="dialog-backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle">
+    <div class="dialog-header">
+      <h2 id="deleteDialogTitle">Delete Entry</h2>
+      <button id="closeDeleteDialogBtn" class="btn btn-icon" aria-label="Close">&times;</button>
+    </div>
+    <p id="deleteDialogMessage" class="delete-dialog-message"></p>
+    <p id="deleteFormError" class="form-error" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" id="cancelDeleteBtn" class="btn btn-ghost">Cancel</button>
+      <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 
 <script type="module" src="js/main.js"></script>

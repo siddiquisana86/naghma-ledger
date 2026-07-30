@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 import { initAuth, signIn, signOut, isSignedIn, getAccessToken, getEmail } from './auth.js';
-import { loadLedger, lastAmountForStudent, addEntry, addStudent, loadAccountSummary, updateOverallBalance } from './ledger.js';
+import { loadLedger, lastAmountForStudent, addEntry, updateEntry, deleteEntry, addStudent, loadAccountSummary, updateOverallBalance } from './ledger.js';
 import { initTheme } from './theme.js';
 
 const els = {
@@ -25,6 +25,7 @@ const els = {
   txLoading: document.getElementById('txLoading'),
   addEntryFab: document.getElementById('addEntryFab'),
   entryDialogBackdrop: document.getElementById('entryDialogBackdrop'),
+  entryDialogTitle: document.getElementById('entryDialogTitle'),
   closeDialogBtn: document.getElementById('closeDialogBtn'),
   entryForm: document.getElementById('entryForm'),
   typeToggle: document.getElementById('typeToggle'),
@@ -43,11 +44,19 @@ const els = {
   formError: document.getElementById('formError'),
   submitEntryBtn: document.getElementById('submitEntryBtn'),
   toast: document.getElementById('toast'),
+  deleteDialogBackdrop: document.getElementById('deleteDialogBackdrop'),
+  closeDeleteDialogBtn: document.getElementById('closeDeleteDialogBtn'),
+  deleteDialogMessage: document.getElementById('deleteDialogMessage'),
+  deleteFormError: document.getElementById('deleteFormError'),
+  cancelDeleteBtn: document.getElementById('cancelDeleteBtn'),
+  confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
 };
 
 let ledgerData = { rows: [], students: [] };
 let accountSummary = { overallBalance: null, lastUpdated: null, sanaShare: null, overallRow: null, lastUpdatedRow: null };
 let toastTimer = null;
+let editingRow = null;
+let pendingDeleteRow = null;
 
 const rupees = (n) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -71,6 +80,7 @@ function updateAuthUI() {
   els.signedInAs.textContent = getEmail() || '';
   els.addEntryFab.hidden = !signedIn;
   renderAccountSummary();
+  renderTxList();
 }
 
 function renderAccountSummary() {
@@ -122,18 +132,28 @@ function renderTxList() {
   els.txList.innerHTML = '';
   els.txEmpty.hidden = filtered.length !== 0;
 
+  const signedIn = isSignedIn();
   for (const r of filtered) {
     const li = document.createElement('li');
     li.className = 'tx-item';
+    li.dataset.row = r.row;
     const isIn = r.amountIn > 0;
     const amount = isIn ? r.amountIn : r.amountOut;
     const dateStr = r.date ? r.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+    const actions = signedIn ? `
+      <div class="tx-actions">
+        <button type="button" class="btn-link-edit tx-edit-btn" aria-label="Edit entry" title="Edit entry">&#9998;</button>
+        <button type="button" class="btn-link-delete tx-delete-btn" aria-label="Delete entry" title="Delete entry">&#128465;</button>
+      </div>` : '';
     li.innerHTML = `
       <div class="tx-main">
         <div class="tx-who">${escapeHtml(r.who || r.type)}</div>
         <div class="tx-meta">${escapeHtml(r.type)}${dateStr ? ' &middot; ' + dateStr : ''}${r.notes ? ' &middot; ' + escapeHtml(r.notes) : ''}</div>
       </div>
-      <div class="tx-amount ${isIn ? 'in' : 'out'}">${isIn ? '+' : '-'}${rupees(amount)}</div>
+      <div class="tx-right">
+        <div class="tx-amount ${isIn ? 'in' : 'out'}">${isIn ? '+' : '-'}${rupees(amount)}</div>
+        ${actions}
+      </div>
     `;
     els.txList.appendChild(li);
   }
@@ -174,6 +194,9 @@ function setActiveType(type) {
 }
 
 function openDialog() {
+  editingRow = null;
+  els.entryDialogTitle.textContent = 'Add Entry';
+  els.submitEntryBtn.textContent = 'Save Entry';
   els.entryForm.reset();
   setActiveType('Received');
   els.dateInput.value = new Date().toISOString().slice(0, 10);
@@ -184,8 +207,58 @@ function openDialog() {
   els.entryDialogBackdrop.hidden = false;
 }
 
+const ENTRY_TYPES = ['Received', 'Spent for Naghma', 'Transferred to Naghma'];
+
+// Reuses the add-entry dialog/form - only differs in which fields are
+// prefilled and which ledger.js function onSubmitEntry calls (see
+// editingRow). Entries with a type outside the three the form supports
+// (e.g. a migrated "Opening Balance" row) fall back to "Received" so the
+// dialog has something sensible to show; editing such a row still works,
+// it just recategorizes it.
+function openEditDialog(entry) {
+  editingRow = entry.row;
+  els.entryDialogTitle.textContent = 'Edit Entry';
+  els.submitEntryBtn.textContent = 'Save Changes';
+  els.entryForm.reset();
+  els.formError.hidden = true;
+  renderStudentOptions();
+
+  const type = ENTRY_TYPES.includes(entry.type) ? entry.type : 'Received';
+  setActiveType(type);
+  els.dateInput.value = entry.date ? entry.date.toISOString().slice(0, 10) : '';
+  els.amountInput.value = entry.amountIn > 0 ? entry.amountIn : entry.amountOut;
+  els.notesInput.value = entry.notes || '';
+  els.newStudentInput.hidden = true;
+  els.channelOtherInput.hidden = true;
+
+  if (type === 'Received') {
+    const known = [...els.studentSelect.options].some(o => o.value === entry.who);
+    if (known) {
+      els.studentSelect.value = entry.who;
+    } else {
+      els.studentSelect.value = '__new__';
+      els.newStudentInput.value = entry.who;
+      els.newStudentInput.hidden = false;
+    }
+  } else if (type === 'Spent for Naghma') {
+    els.sourceInput.value = entry.who;
+  } else {
+    const known = [...els.channelSelect.options].some(o => o.value === entry.who);
+    if (known) {
+      els.channelSelect.value = entry.who;
+    } else {
+      els.channelSelect.value = '__other__';
+      els.channelOtherInput.value = entry.who;
+      els.channelOtherInput.hidden = false;
+    }
+  }
+
+  els.entryDialogBackdrop.hidden = false;
+}
+
 function closeDialog() {
   els.entryDialogBackdrop.hidden = true;
+  editingRow = null;
 }
 
 function openBalanceDialog() {
@@ -199,6 +272,24 @@ function openBalanceDialog() {
 
 function closeBalanceDialog() {
   els.balanceDialogBackdrop.hidden = true;
+}
+
+function openDeleteDialog(entry) {
+  pendingDeleteRow = entry.row;
+  const amount = entry.amountIn > 0 ? entry.amountIn : entry.amountOut;
+  const dateStr = entry.date
+    ? entry.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
+  els.deleteDialogMessage.textContent =
+    `Delete "${entry.who || entry.type}" (${rupees(amount)}${dateStr ? ', ' + dateStr : ''})? ` +
+    `This removes the row from the Google Sheet and can't be undone from the app.`;
+  els.deleteFormError.hidden = true;
+  els.deleteDialogBackdrop.hidden = false;
+}
+
+function closeDeleteDialog() {
+  els.deleteDialogBackdrop.hidden = true;
+  pendingDeleteRow = null;
 }
 
 function wireEvents() {
@@ -235,6 +326,20 @@ function wireEvents() {
   els.closeBalanceDialogBtn.addEventListener('click', closeBalanceDialog);
   els.balanceDialogBackdrop.addEventListener('click', (e) => { if (e.target === els.balanceDialogBackdrop) closeBalanceDialog(); });
   els.balanceForm.addEventListener('submit', onSubmitBalance);
+
+  els.txList.addEventListener('click', (e) => {
+    const li = e.target.closest('.tx-item');
+    if (!li) return;
+    const entry = ledgerData.rows.find(r => r.row === Number(li.dataset.row));
+    if (!entry) return;
+    if (e.target.closest('.tx-edit-btn')) openEditDialog(entry);
+    else if (e.target.closest('.tx-delete-btn')) openDeleteDialog(entry);
+  });
+
+  els.closeDeleteDialogBtn.addEventListener('click', closeDeleteDialog);
+  els.cancelDeleteBtn.addEventListener('click', closeDeleteDialog);
+  els.deleteDialogBackdrop.addEventListener('click', (e) => { if (e.target === els.deleteDialogBackdrop) closeDeleteDialog(); });
+  els.confirmDeleteBtn.addEventListener('click', onConfirmDelete);
 }
 
 async function onSubmitBalance(e) {
@@ -279,6 +384,34 @@ async function onSubmitBalance(e) {
   } finally {
     els.submitBalanceBtn.disabled = false;
     els.submitBalanceBtn.textContent = 'Save';
+  }
+}
+
+async function onConfirmDelete() {
+  if (pendingDeleteRow === null) return;
+  if (!isSignedIn()) {
+    els.deleteFormError.textContent = 'Please sign in first.';
+    els.deleteFormError.hidden = false;
+    return;
+  }
+
+  els.deleteFormError.hidden = true;
+  els.confirmDeleteBtn.disabled = true;
+  els.confirmDeleteBtn.textContent = 'Deleting…';
+  try {
+    await deleteEntry(pendingDeleteRow, getAccessToken());
+    closeDeleteDialog();
+    showToast('Entry deleted');
+    await refreshData();
+  } catch (err) {
+    console.error(err);
+    els.deleteFormError.textContent = err.message.includes('403')
+      ? "You don't have edit access to this sheet."
+      : 'Could not delete. Check your connection and try again.';
+    els.deleteFormError.hidden = false;
+  } finally {
+    els.confirmDeleteBtn.disabled = false;
+    els.confirmDeleteBtn.textContent = 'Delete';
   }
 }
 
@@ -327,6 +460,7 @@ async function onSubmitEntry(e) {
     }
   }
 
+  const isEdit = editingRow !== null;
   els.submitEntryBtn.disabled = true;
   els.submitEntryBtn.textContent = 'Saving…';
   try {
@@ -334,9 +468,13 @@ async function onSubmitEntry(e) {
     if (type === 'Received' && els.studentSelect.value === '__new__') {
       await addStudent(who, token);
     }
-    await addEntry({ type, who, amount, date, notes }, token);
+    if (isEdit) {
+      await updateEntry({ row: editingRow, type, who, amount, date, notes }, token);
+    } else {
+      await addEntry({ type, who, amount, date, notes }, token);
+    }
     closeDialog();
-    showToast('Entry saved');
+    showToast(isEdit ? 'Entry updated' : 'Entry saved');
     await refreshData();
   } catch (err) {
     console.error(err);
@@ -346,7 +484,7 @@ async function onSubmitEntry(e) {
     els.formError.hidden = false;
   } finally {
     els.submitEntryBtn.disabled = false;
-    els.submitEntryBtn.textContent = 'Save Entry';
+    els.submitEntryBtn.textContent = isEdit ? 'Save Changes' : 'Save Entry';
   }
 }
 

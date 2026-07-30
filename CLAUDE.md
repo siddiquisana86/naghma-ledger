@@ -34,18 +34,25 @@ added directly through the app or the Sheet itself.
   `CLIENT_ID`, and the `USE_MOCK_DATA` flag. These credentials are meant to
   be public in client-side code; real access control lives in the Sheet's
   own sharing permissions, not in these values.
-- `js/sheetsApi.js` — thin wrapper over three Sheets API operations:
-  `readRange` (API key, no auth — used for the no-login read-only view),
-  `appendRow` and `updateRange` (both require an OAuth access token).
+- `js/sheetsApi.js` — thin wrapper over the Sheets API operations the app
+  needs: `readRange` (API key, no auth — used for the no-login read-only
+  view), `appendRow` and `updateRange` (both require an OAuth access
+  token), `batchUpdate` (structural ops like row deletion — also OAuth),
+  and `getSheetId` (looks up a tab's numeric `sheetId` by title, needed
+  because `batchUpdate` addresses sheets by numeric id, not tab name).
 - `js/auth.js` — wraps Google Identity Services (`google.accounts.oauth2`
   token client, scope `.../auth/spreadsheets`). Every exported function
   branches on `CONFIG.USE_MOCK_DATA` first and short-circuits to local mock
   state, so the whole auth flow can be exercised with zero real credentials.
 - `js/ledger.js` — the data layer between the API and the UI: `loadLedger`,
-  `addEntry`, `addStudent`, `loadAccountSummary`, `updateOverallBalance`.
-  Same mock-mode branch pattern as `auth.js`. Row shape read from the sheet:
-  `Date | Type | Student/Source | Amount In | Amount Out | Notes | Balance`.
-  See below for how `Balance` gets written on each new entry.
+  `addEntry`, `updateEntry`, `deleteEntry`, `addStudent`,
+  `loadAccountSummary`, `updateOverallBalance`. Same mock-mode branch
+  pattern as `auth.js`. Row shape read from the sheet: `Date | Type |
+  Student/Source | Amount In | Amount Out | Notes | Balance`, plus a `row`
+  field (the entry's 1-based sheet row number, since `LEDGER_RANGE` starts
+  at row 2) used to target `updateEntry`/`deleteEntry` at the right row.
+  See below for how `Balance` gets written on each new entry, and for why
+  edit/delete don't need to touch it.
 - `js/main.js` — DOM wiring and rendering only; imports from the three
   modules above and holds no Sheets-API or auth logic itself.
 - `js/mockData.js` — fake placeholder data for `USE_MOCK_DATA: true`. Never
@@ -79,6 +86,20 @@ last pre-filled row, nowhere near the real data — silently breaking the
 running balance. Don't reintroduce a pre-filled buffer; the row-parse-then-
 write approach here is the fix.
 
+### Why `updateEntry`/`deleteEntry` don't need to rewrite Balance formulas
+
+Each row's Balance formula is row-relative and self-contained — it only
+reads its own row's `D`/`E` cells (plus the fixed `$2` anchor). `updateEntry`
+only overwrites `A{row}:F{row}`, so the formula in `G{row}` never needs to
+change. `deleteEntry` removes the row entirely via `batchUpdate`'s
+`deleteDimension` (the same effect as deleting a row by hand in the Sheets
+UI) rather than blanking its cells — Google Sheets auto-adjusts every later
+row's formula references when rows shift up this way, so nothing downstream
+needs to be rewritten either. Blanking instead of deleting would leave a
+row blank across every column, which is exactly the condition that made
+`values.append` skip past the old pre-filled buffer (previous section) —
+so a blanked "deleted" row could get silently reused by a future append.
+
 ### The `[hidden]` attribute in `styles.css`
 
 Elements toggled via the HTML `hidden` attribute (dialogs, conditional form
@@ -98,10 +119,15 @@ tab's rows get reordered later. Don't hardcode row numbers for these fields.
 
 ## Scope notes (deliberate, not gaps)
 
-- No in-app edit/delete of past ledger entries — corrections happen directly
-  in Google Sheets, which is why `Amount In`/`Amount Out`/`Balance` are all
-  live formulas rather than static numbers written by the app.
-- No offline write queue — adding an entry requires connectivity.
+- Editing/deleting a ledger entry from the app is unrestricted — any
+  signed-in account can edit or delete any row, old or new. This isn't a new
+  capability: both authorized accounts already have full Editor access to
+  the underlying Sheet and could already do this by hand; the app just adds
+  a friendlier UI for it. There's no extra confirmation step beyond the
+  in-app delete-confirm dialog, and no undo — Google Sheets' own version
+  history is the safety net.
+- No offline write queue — adding, editing, or deleting an entry all
+  require connectivity.
 - The read-only view has no login; it depends on the Sheet being shared
   "Anyone with the link: Viewer". The account-balance UI is hidden behind
   sign-in state as a UI-level-only precaution, not a real access boundary —
