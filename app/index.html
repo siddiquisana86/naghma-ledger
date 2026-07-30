@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Naghma's Ledger</title>
+<meta name="description" content="Tuition earnings and expense tracker for Naghma" />
+<meta name="theme-color" content="#0f6e5c" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icons/icon.svg" />
+<link rel="stylesheet" href="styles.css" />
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Naghma's Ledger</h1>
+  <div id="authArea" class="auth-area">
+    <button id="themeToggleBtn" class="btn btn-icon" aria-label="Switch to dark theme" title="Switch theme">&#127769;</button>
+    <button id="signInBtn" class="btn btn-ghost" hidden>Sign in with Google</button>
+    <span id="signedInAs" class="signed-in-as" hidden></span>
+    <button id="signOutBtn" class="btn btn-ghost" hidden>Sign out</button>
+  </div>
+</header>
+
+<main>
+  <section class="balance-card" aria-live="polite">
+    <p class="balance-label">Current balance</p>
+    <p class="balance-amount" id="balanceAmount">&mdash;</p>
+    <p class="balance-sub" id="balanceSub"></p>
+    <div id="accountSummaryLine" class="account-summary-line" hidden>
+      <span id="accountSummaryText"></span>
+      <button id="editAccountBalanceBtn" class="btn-link-edit" aria-label="Edit account balance" title="Edit account balance">&#9998;</button>
+    </div>
+  </section>
+
+  <section class="filter-row">
+    <label for="monthFilter">Month</label>
+    <select id="monthFilter">
+      <option value="all">All</option>
+    </select>
+  </section>
+
+  <section class="tx-list-section">
+    <h2>Recent transactions</h2>
+    <ul id="txList" class="tx-list"></ul>
+    <p id="txEmpty" class="tx-empty" hidden>No transactions yet.</p>
+    <p id="txLoading" class="tx-empty">Loading&hellip;</p>
+  </section>
+</main>
+
+<button id="addEntryFab" class="fab" hidden aria-label="Add entry">+</button>
+
+<div id="entryDialogBackdrop" class="dialog-backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="entryDialogTitle">
+    <div class="dialog-header">
+      <h2 id="entryDialogTitle">Add Entry</h2>
+      <button id="closeDialogBtn" class="btn btn-icon" aria-label="Close">&times;</button>
+    </div>
+
+    <form id="entryForm">
+      <div class="segmented" role="tablist" id="typeToggle">
+        <button type="button" class="segment active" data-type="Received">Received</button>
+        <button type="button" class="segment" data-type="Spent for Naghma">Spent</button>
+        <button type="button" class="segment" data-type="Transferred to Naghma">Transferred</button>
+      </div>
+      <input type="hidden" id="typeInput" value="Received" />
+
+      <div id="receivedFields" class="field-group">
+        <label for="studentSelect">Student</label>
+        <select id="studentSelect">
+          <option value="__new__">+ Add new student&hellip;</option>
+        </select>
+        <input type="text" id="newStudentInput" placeholder="New student name" hidden />
+      </div>
+
+      <div id="spentFields" class="field-group" hidden>
+        <label for="sourceInput">What was it for?</label>
+        <input type="text" id="sourceInput" placeholder="e.g. Lenskart glasses" />
+      </div>
+
+      <div id="transferredFields" class="field-group" hidden>
+        <label for="channelSelect">Channel</label>
+        <select id="channelSelect">
+          <option>Fampay</option>
+          <option>Bank Transfer</option>
+          <option>Cash</option>
+          <option value="__other__">Other&hellip;</option>
+        </select>
+        <input type="text" id="channelOtherInput" placeholder="Channel name" hidden />
+      </div>
+
+      <div class="field-group">
+        <label for="amountInput">Amount (&#8377;)</label>
+        <input type="number" id="amountInput" inputmode="decimal" min="0" step="1" placeholder="0" required />
+      </div>
+
+      <div class="field-group">
+        <label for="dateInput">Date</label>
+        <input type="date" id="dateInput" required />
+      </div>
+
+      <div class="field-group">
+        <label for="notesInput">Notes (optional)</label>
+        <input type="text" id="notesInput" placeholder="Optional" />
+      </div>
+
+      <p id="formError" class="form-error" hidden></p>
+
+      <button type="submit" id="submitEntryBtn" class="btn btn-primary">Save Entry</button>
+    </form>
+  </div>
+</div>
+
+<div id="balanceDialogBackdrop" class="dialog-backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="balanceDialogTitle">
+    <div class="dialog-header">
+      <h2 id="balanceDialogTitle">Update Account Balance</h2>
+      <button id="closeBalanceDialogBtn" class="btn btn-icon" aria-label="Close">&times;</button>
+    </div>
+    <form id="balanceForm">
+      <div class="field-group">
+        <label for="overallBalanceInput">Overall account balance (&#8377;)</label>
+        <input type="number" id="overallBalanceInput" inputmode="decimal" min="0" step="1" required />
+      </div>
+      <p id="balanceFormError" class="form-error" hidden></p>
+      <button type="submit" id="submitBalanceBtn" class="btn btn-primary">Save</button>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
