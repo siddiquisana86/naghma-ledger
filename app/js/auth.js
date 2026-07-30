@@ -29,7 +29,7 @@ export function initAuth({ onSignedIn }) {
   }
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
     callback: async (resp) => {
       if (resp.error) {
         console.error('Sign-in failed', resp);
