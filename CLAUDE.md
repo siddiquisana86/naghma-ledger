@@ -109,6 +109,15 @@ flex/block/grid` rule on the same selector, since author CSS overrides the
 `.hidden = true/false` in `main.js` needs a matching
 `.selector[hidden] { display: none; }` rule in `styles.css`.
 
+### Sort/filter/search in the transaction list is display-only
+
+`renderTxList()`'s search box, Filters dialog (type/student/custom date
+range), and Sort dropdown only change which of `ledgerData.rows` get
+rendered and in what order — they never write anything back to the Sheet
+or touch a row's `balance`, which stays whatever was computed from its
+actual position in the Sheet. Sorting by amount or grouping by type is
+purely a client-side re-arrangement for display.
+
 ### Editable "Summary" fields are row-discovered by label, not by fixed row number
 
 `loadAccountSummary` in `ledger.js` finds the "Overall Account Balance" /

@@ -13,6 +13,7 @@ const SHELL_FILES = [
   './js/sheetsApi.js',
   './js/ledger.js',
   './js/main.js',
+  './js/icons.js',
   './js/mockData.js',
   './js/theme.js',
 ];

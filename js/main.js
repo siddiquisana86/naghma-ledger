@@ -2,6 +2,7 @@ import { CONFIG } from './config.js';
 import { initAuth, signIn, signOut, isSignedIn, getAccessToken, getEmail } from './auth.js';
 import { loadLedger, lastAmountForStudent, addEntry, updateEntry, deleteEntry, addStudent, loadAccountSummary, updateOverallBalance } from './ledger.js';
 import { initTheme } from './theme.js';
+import { ICONS } from './icons.js';
 
 const els = {
   themeToggleBtn: document.getElementById('themeToggleBtn'),
@@ -11,6 +12,18 @@ const els = {
   balanceAmount: document.getElementById('balanceAmount'),
   balanceSub: document.getElementById('balanceSub'),
   monthFilter: document.getElementById('monthFilter'),
+  sortSelect: document.getElementById('sortSelect'),
+  searchInput: document.getElementById('searchInput'),
+  filtersBtn: document.getElementById('filtersBtn'),
+  filtersBadge: document.getElementById('filtersBadge'),
+  filtersDialogBackdrop: document.getElementById('filtersDialogBackdrop'),
+  closeFiltersDialogBtn: document.getElementById('closeFiltersDialogBtn'),
+  typeFilterToggle: document.getElementById('typeFilterToggle'),
+  whoFilterSelect: document.getElementById('whoFilterSelect'),
+  dateFromInput: document.getElementById('dateFromInput'),
+  dateToInput: document.getElementById('dateToInput'),
+  clearFiltersBtn: document.getElementById('clearFiltersBtn'),
+  applyFiltersBtn: document.getElementById('applyFiltersBtn'),
   accountSummaryLine: document.getElementById('accountSummaryLine'),
   accountSummaryText: document.getElementById('accountSummaryText'),
   editAccountBalanceBtn: document.getElementById('editAccountBalanceBtn'),
@@ -57,6 +70,10 @@ let accountSummary = { overallBalance: null, lastUpdated: null, sanaShare: null,
 let toastTimer = null;
 let editingRow = null;
 let pendingDeleteRow = null;
+let typeFilter = 'all';
+let whoFilter = 'all';
+let dateRange = { from: null, to: null };
+let searchDebounceTimer = null;
 
 const rupees = (n) => `₹${Math.round(n).toLocaleString('en-IN')}`;
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -120,20 +137,78 @@ function renderBalance() {
     : '';
 }
 
+function entryAmount(r) {
+  return r.amountIn > 0 ? r.amountIn : r.amountOut;
+}
+
+const TYPE_ORDER = ['Received', 'Spent for Naghma', 'Transferred to Naghma'];
+
+function hasCustomDateRange() {
+  return !!(dateRange.from || dateRange.to);
+}
+
+function filtersActive() {
+  return els.monthFilter.value !== 'all' || typeFilter !== 'all' || whoFilter !== 'all' ||
+    hasCustomDateRange() || els.searchInput.value.trim() !== '';
+}
+
+function passesFilters(r) {
+  if (hasCustomDateRange()) {
+    // dateRange.from/to are 'YYYY-MM-DD' strings from <input type="date">;
+    // convert to Date so the comparison is numeric (a Date vs. a plain
+    // string compares via NaN and is always false).
+    if (dateRange.from && (!r.date || r.date < new Date(dateRange.from))) return false;
+    if (dateRange.to && (!r.date || r.date > new Date(dateRange.to))) return false;
+  } else if (els.monthFilter.value !== 'all') {
+    if (!r.date || monthKey(r.date) !== els.monthFilter.value) return false;
+  }
+  if (typeFilter !== 'all' && r.type !== typeFilter) return false;
+  if (whoFilter !== 'all' && r.who !== whoFilter) return false;
+  const q = els.searchInput.value.trim().toLowerCase();
+  if (q && !`${r.who} ${r.notes} ${entryAmount(r)}`.toLowerCase().includes(q)) return false;
+  return true;
+}
+
+function compareEntries(a, b) {
+  switch (els.sortSelect.value) {
+    case 'date-asc':
+      return (a.date - b.date) || (a.row - b.row);
+    case 'amount-desc':
+      return entryAmount(b) - entryAmount(a) || (b.date - a.date) || (b.row - a.row);
+    case 'amount-asc':
+      return entryAmount(a) - entryAmount(b) || (b.date - a.date) || (b.row - a.row);
+    case 'type': {
+      const ia = TYPE_ORDER.indexOf(a.type), ib = TYPE_ORDER.indexOf(b.type);
+      const oa = ia === -1 ? TYPE_ORDER.length : ia, ob = ib === -1 ? TYPE_ORDER.length : ib;
+      return (oa - ob) || (b.date - a.date) || (b.row - a.row);
+    }
+    default: // 'date-desc'
+      return (b.date - a.date) || (b.row - a.row);
+  }
+}
+
 function renderTxList() {
-  const filter = els.monthFilter.value;
-  const filtered = ledgerData.rows
-    .filter(r => filter === 'all' || (r.date && monthKey(r.date) === filter))
-    .slice()
-    .reverse()
-    .slice(0, 50);
+  const list = ledgerData.rows.filter(passesFilters).sort(compareEntries);
+  const capped = filtersActive() ? list : list.slice(0, 50);
 
   els.txLoading.hidden = true;
   els.txList.innerHTML = '';
-  els.txEmpty.hidden = filtered.length !== 0;
+  els.txEmpty.hidden = capped.length !== 0;
+  els.txEmpty.textContent = ledgerData.rows.length === 0
+    ? 'No transactions yet.'
+    : 'No transactions match your search/filters.';
 
   const signedIn = isSignedIn();
-  for (const r of filtered) {
+  const grouped = els.sortSelect.value === 'type';
+  let lastType = null;
+  for (const r of capped) {
+    if (grouped && r.type !== lastType) {
+      lastType = r.type;
+      const header = document.createElement('li');
+      header.className = 'tx-group-header';
+      header.textContent = r.type;
+      els.txList.appendChild(header);
+    }
     const li = document.createElement('li');
     li.className = 'tx-item';
     li.dataset.row = r.row;
@@ -142,8 +217,8 @@ function renderTxList() {
     const dateStr = r.date ? r.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
     const actions = signedIn ? `
       <div class="tx-actions">
-        <button type="button" class="btn-link-edit tx-edit-btn" aria-label="Edit entry" title="Edit entry">&#9998;</button>
-        <button type="button" class="btn-link-delete tx-delete-btn" aria-label="Delete entry" title="Delete entry">&#128465;</button>
+        <button type="button" class="btn-link-edit tx-edit-btn" aria-label="Edit entry" title="Edit entry">${ICONS.edit}</button>
+        <button type="button" class="btn-link-delete tx-delete-btn" aria-label="Delete entry" title="Delete entry">${ICONS.trash}</button>
       </div>` : '';
     li.innerHTML = `
       <div class="tx-main">
@@ -157,6 +232,12 @@ function renderTxList() {
     `;
     els.txList.appendChild(li);
   }
+}
+
+function renderStaticIcons() {
+  document.querySelectorAll('[data-icon]').forEach((el) => {
+    el.innerHTML = ICONS[el.dataset.icon];
+  });
 }
 
 function escapeHtml(s) {
@@ -198,7 +279,7 @@ function openDialog() {
   els.entryDialogTitle.textContent = 'Add Entry';
   els.submitEntryBtn.textContent = 'Save Entry';
   els.entryForm.reset();
-  setActiveType('Received');
+  setActiveType('Spent for Naghma');
   els.dateInput.value = new Date().toISOString().slice(0, 10);
   els.newStudentInput.hidden = true;
   els.channelOtherInput.hidden = true;
@@ -212,9 +293,10 @@ const ENTRY_TYPES = ['Received', 'Spent for Naghma', 'Transferred to Naghma'];
 // Reuses the add-entry dialog/form - only differs in which fields are
 // prefilled and which ledger.js function onSubmitEntry calls (see
 // editingRow). Entries with a type outside the three the form supports
-// (e.g. a migrated "Opening Balance" row) fall back to "Received" so the
-// dialog has something sensible to show; editing such a row still works,
-// it just recategorizes it.
+// (e.g. a migrated "Opening Balance" row) fall back to the same default as
+// openDialog's fresh-add case ("Spent for Naghma") so the dialog has
+// something sensible to show; editing such a row still works, it just
+// recategorizes it.
 function openEditDialog(entry) {
   editingRow = entry.row;
   els.entryDialogTitle.textContent = 'Edit Entry';
@@ -223,7 +305,7 @@ function openEditDialog(entry) {
   els.formError.hidden = true;
   renderStudentOptions();
 
-  const type = ENTRY_TYPES.includes(entry.type) ? entry.type : 'Received';
+  const type = ENTRY_TYPES.includes(entry.type) ? entry.type : 'Spent for Naghma';
   setActiveType(type);
   els.dateInput.value = entry.date ? entry.date.toISOString().slice(0, 10) : '';
   els.amountInput.value = entry.amountIn > 0 ? entry.amountIn : entry.amountOut;
@@ -292,6 +374,62 @@ function closeDeleteDialog() {
   pendingDeleteRow = null;
 }
 
+function updateFiltersBadge() {
+  els.filtersBadge.hidden = !(typeFilter !== 'all' || whoFilter !== 'all' || hasCustomDateRange());
+}
+
+function renderWhoFilterOptions() {
+  const names = [...new Set(ledgerData.rows.map(r => r.who).filter(Boolean))].sort();
+  els.whoFilterSelect.innerHTML = '<option value="all">All</option>' +
+    names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+}
+
+let pendingTypeFilter = 'all';
+
+// Only the type toggle's selection is visual-only until Apply (the who/date
+// controls read their own DOM value directly on Apply, but a segmented
+// toggle has no single form control to read back from, so its choice needs
+// a holding variable).
+function setDialogTypeFilter(type) {
+  pendingTypeFilter = type;
+  [...els.typeFilterToggle.children].forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
+}
+
+function openFiltersDialog() {
+  renderWhoFilterOptions();
+  setDialogTypeFilter(typeFilter);
+  els.whoFilterSelect.value = whoFilter;
+  els.dateFromInput.value = dateRange.from || '';
+  els.dateToInput.value = dateRange.to || '';
+  els.filtersDialogBackdrop.hidden = false;
+}
+
+function closeFiltersDialog() {
+  els.filtersDialogBackdrop.hidden = true;
+}
+
+function onApplyFilters() {
+  typeFilter = pendingTypeFilter;
+  whoFilter = els.whoFilterSelect.value;
+  dateRange = { from: els.dateFromInput.value || null, to: els.dateToInput.value || null };
+  updateFiltersBadge();
+  closeFiltersDialog();
+  renderTxList();
+}
+
+function onClearFilters() {
+  typeFilter = 'all';
+  whoFilter = 'all';
+  dateRange = { from: null, to: null };
+  setDialogTypeFilter('all');
+  els.whoFilterSelect.value = 'all';
+  els.dateFromInput.value = '';
+  els.dateToInput.value = '';
+  updateFiltersBadge();
+  closeFiltersDialog();
+  renderTxList();
+}
+
 function wireEvents() {
   els.signInBtn.addEventListener('click', () => signIn(updateAuthUI));
   els.signOutBtn.addEventListener('click', () => signOut(updateAuthUI));
@@ -340,6 +478,22 @@ function wireEvents() {
   els.cancelDeleteBtn.addEventListener('click', closeDeleteDialog);
   els.deleteDialogBackdrop.addEventListener('click', (e) => { if (e.target === els.deleteDialogBackdrop) closeDeleteDialog(); });
   els.confirmDeleteBtn.addEventListener('click', onConfirmDelete);
+
+  els.sortSelect.addEventListener('change', renderTxList);
+  els.searchInput.addEventListener('input', () => {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(renderTxList, 150);
+  });
+
+  els.filtersBtn.addEventListener('click', openFiltersDialog);
+  els.closeFiltersDialogBtn.addEventListener('click', closeFiltersDialog);
+  els.filtersDialogBackdrop.addEventListener('click', (e) => { if (e.target === els.filtersDialogBackdrop) closeFiltersDialog(); });
+  els.typeFilterToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('.segment');
+    if (btn) setDialogTypeFilter(btn.dataset.type);
+  });
+  els.clearFiltersBtn.addEventListener('click', onClearFilters);
+  els.applyFiltersBtn.addEventListener('click', onApplyFilters);
 }
 
 async function onSubmitBalance(e) {
@@ -502,6 +656,7 @@ if ('serviceWorker' in navigator) {
 }
 
 els.signInBtn.hidden = false;
+renderStaticIcons();
 initTheme(els.themeToggleBtn);
 wireEvents();
 updateAuthUI();

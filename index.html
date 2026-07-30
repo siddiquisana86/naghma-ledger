@@ -15,9 +15,12 @@
 <body>
 
 <header class="app-header">
-  <h1>Naghma's Ledger</h1>
+  <div class="brand">
+    <img src="icons/icon.svg" alt="" class="app-logo" width="28" height="28" />
+    <h1>Naghma's Ledger</h1>
+  </div>
   <div id="authArea" class="auth-area">
-    <button id="themeToggleBtn" class="btn btn-icon" aria-label="Switch to dark theme" title="Switch theme">&#127769;</button>
+    <button id="themeToggleBtn" class="btn btn-icon" aria-label="Switch to dark theme" title="Switch theme"></button>
     <button id="signInBtn" class="btn btn-ghost" hidden>Sign in with Google</button>
     <span id="signedInAs" class="signed-in-as" hidden></span>
     <button id="signOutBtn" class="btn btn-ghost" hidden>Sign out</button>
@@ -31,41 +34,56 @@
     <p class="balance-sub" id="balanceSub"></p>
     <div id="accountSummaryLine" class="account-summary-line" hidden>
       <span id="accountSummaryText"></span>
-      <button id="editAccountBalanceBtn" class="btn-link-edit" aria-label="Edit account balance" title="Edit account balance">&#9998;</button>
+      <button id="editAccountBalanceBtn" class="btn-link-edit" aria-label="Edit account balance" title="Edit account balance" data-icon="edit"></button>
     </div>
   </section>
 
+  <section class="search-row">
+    <input type="search" id="searchInput" placeholder="Search by name, notes, or amount&hellip;" aria-label="Search transactions" />
+  </section>
+
   <section class="filter-row">
-    <label for="monthFilter">Month</label>
+    <label for="monthFilter" class="sr-only">Month</label>
     <select id="monthFilter">
       <option value="all">All</option>
     </select>
+    <label for="sortSelect" class="sr-only">Sort</label>
+    <select id="sortSelect">
+      <option value="date-desc">Newest first</option>
+      <option value="date-asc">Oldest first</option>
+      <option value="amount-desc">Amount: high to low</option>
+      <option value="amount-asc">Amount: low to high</option>
+      <option value="type">Group by type</option>
+    </select>
+    <button id="filtersBtn" class="btn btn-ghost btn-filters" aria-label="Filters" title="Filters">
+      <span data-icon="filter"></span> Filters<span id="filtersBadge" class="filters-badge" hidden></span>
+    </button>
   </section>
 
   <section class="tx-list-section">
     <h2>Recent transactions</h2>
     <ul id="txList" class="tx-list"></ul>
-    <p id="txEmpty" class="tx-empty" hidden>No transactions yet.</p>
+    <p id="txEmpty" class="tx-empty" hidden></p>
     <p id="txLoading" class="tx-empty">Loading&hellip;</p>
   </section>
 </main>
 
-<button id="addEntryFab" class="fab" hidden aria-label="Add entry">+</button>
+<button id="addEntryFab" class="fab" hidden aria-label="Add entry" data-icon="plus"></button>
 
 <div id="entryDialogBackdrop" class="dialog-backdrop" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="entryDialogTitle">
     <div class="dialog-header">
       <h2 id="entryDialogTitle">Add Entry</h2>
-      <button id="closeDialogBtn" class="btn btn-icon" aria-label="Close">&times;</button>
+      <button id="closeDialogBtn" class="btn btn-icon" aria-label="Close" data-icon="x"></button>
     </div>
 
     <form id="entryForm">
       <div class="segmented" role="tablist" id="typeToggle">
-        <button type="button" class="segment active" data-type="Received">Received</button>
-        <button type="button" class="segment" data-type="Spent for Naghma">Spent</button>
+        <button type="button" class="segment active" data-type="Spent for Naghma">Spent</button>
         <button type="button" class="segment" data-type="Transferred to Naghma">Transferred</button>
+        <button type="button" class="segment" data-type="Received">Received</button>
       </div>
-      <input type="hidden" id="typeInput" value="Received" />
+      <input type="hidden" id="typeInput" value="Spent for Naghma" />
 
       <div id="receivedFields" class="field-group">
         <label for="studentSelect">Student</label>
@@ -117,7 +135,7 @@
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="balanceDialogTitle">
     <div class="dialog-header">
       <h2 id="balanceDialogTitle">Update Account Balance</h2>
-      <button id="closeBalanceDialogBtn" class="btn btn-icon" aria-label="Close">&times;</button>
+      <button id="closeBalanceDialogBtn" class="btn btn-icon" aria-label="Close" data-icon="x"></button>
     </div>
     <form id="balanceForm">
       <div class="field-group">
@@ -134,13 +152,54 @@
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="deleteDialogTitle">
     <div class="dialog-header">
       <h2 id="deleteDialogTitle">Delete Entry</h2>
-      <button id="closeDeleteDialogBtn" class="btn btn-icon" aria-label="Close">&times;</button>
+      <button id="closeDeleteDialogBtn" class="btn btn-icon" aria-label="Close" data-icon="x"></button>
     </div>
     <p id="deleteDialogMessage" class="delete-dialog-message"></p>
     <p id="deleteFormError" class="form-error" hidden></p>
     <div class="dialog-actions">
       <button type="button" id="cancelDeleteBtn" class="btn btn-ghost">Cancel</button>
       <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="filtersDialogBackdrop" class="dialog-backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="filtersDialogTitle">
+    <div class="dialog-header">
+      <h2 id="filtersDialogTitle">Filters</h2>
+      <button id="closeFiltersDialogBtn" class="btn btn-icon" aria-label="Close" data-icon="x"></button>
+    </div>
+
+    <div class="field-group">
+      <label>Type</label>
+      <div class="segmented" role="tablist" id="typeFilterToggle">
+        <button type="button" class="segment active" data-type="all">All</button>
+        <button type="button" class="segment" data-type="Spent for Naghma">Spent</button>
+        <button type="button" class="segment" data-type="Transferred to Naghma">Transferred</button>
+        <button type="button" class="segment" data-type="Received">Received</button>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label for="whoFilterSelect">Student / source</label>
+      <select id="whoFilterSelect">
+        <option value="all">All</option>
+      </select>
+    </div>
+
+    <div class="field-group">
+      <label>Custom date range</label>
+      <div class="date-range-row">
+        <input type="date" id="dateFromInput" aria-label="From date" />
+        <span>to</span>
+        <input type="date" id="dateToInput" aria-label="To date" />
+      </div>
+      <p class="field-hint">Overrides the Month dropdown when set.</p>
+    </div>
+
+    <div class="dialog-actions">
+      <button type="button" id="clearFiltersBtn" class="btn btn-ghost">Clear filters</button>
+      <button type="button" id="applyFiltersBtn" class="btn btn-primary">Apply</button>
     </div>
   </div>
 </div>

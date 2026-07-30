@@ -1,6 +1,8 @@
 // Manual light/dark toggle, layered on top of the OS-level
 // prefers-color-scheme default (see styles.css). No stored preference
 // means "follow system"; once toggled, the explicit choice persists.
+import { ICONS } from './icons.js';
+
 const STORAGE_KEY = 'naghma-ledger-theme';
 
 function systemPrefersDark() {
@@ -23,7 +25,7 @@ function applyTheme(theme) {
 
 function updateButton(btn) {
   const dark = effectiveTheme() === 'dark';
-  btn.textContent = dark ? '☀️' : '🌙'; // sun : crescent moon
+  btn.innerHTML = dark ? ICONS.sun : ICONS.moon;
   btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
 }
 
