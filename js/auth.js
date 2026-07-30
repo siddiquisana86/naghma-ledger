@@ -5,6 +5,7 @@ const SESSION_KEY = 'naghmaLedgerAuth';
 let tokenClient = null;
 let accessToken = null;
 let currentEmail = null;
+let currentName = null;
 let mockSignedIn = false;
 
 export function isSignedIn() {
@@ -20,6 +21,13 @@ export function getEmail() {
   return currentEmail;
 }
 
+// Falls back to email if the profile scope hasn't been granted yet (e.g. a
+// session saved before this was added) or a Google account has no name set.
+export function getName() {
+  if (CONFIG.USE_MOCK_DATA) return mockSignedIn ? 'Demo User' : null;
+  return currentName || currentEmail;
+}
+
 // The access token itself lives only in memory (as before), but is mirrored
 // into sessionStorage so a page reload doesn't force a fresh sign-in - it's
 // short-lived (~1hr, enforced by Google) and scoped no wider than what the
@@ -27,7 +35,7 @@ export function getEmail() {
 // doesn't change the app's security posture.
 function saveSession(expiresIn) {
   sessionStorage.setItem(SESSION_KEY, JSON.stringify({
-    accessToken, email: currentEmail, expiresAt: Date.now() + expiresIn * 1000,
+    accessToken, email: currentEmail, name: currentName, expiresAt: Date.now() + expiresIn * 1000,
   }));
 }
 
@@ -57,7 +65,7 @@ export function initAuth({ onSignedIn }) {
   }
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
+    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
     callback: async (resp) => {
       if (resp.error) {
         console.error('Sign-in failed', resp);
@@ -74,6 +82,7 @@ export function initAuth({ onSignedIn }) {
   if (session) {
     accessToken = session.accessToken;
     currentEmail = session.email;
+    currentName = session.name || null;
     onSignedIn && onSignedIn();
   }
 }
@@ -102,6 +111,7 @@ export function signOut(onSignedOut) {
   }
   accessToken = null;
   currentEmail = null;
+  currentName = null;
   sessionStorage.removeItem(SESSION_KEY);
   onSignedOut && onSignedOut();
 }
@@ -113,7 +123,9 @@ async function fetchProfile() {
     });
     const data = await res.json();
     currentEmail = data.email || null;
+    currentName = data.name || null;
   } catch (e) {
     currentEmail = null;
+    currentName = null;
   }
 }

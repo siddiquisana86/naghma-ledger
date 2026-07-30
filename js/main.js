@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { initAuth, signIn, signOut, isSignedIn, getAccessToken, getEmail } from './auth.js';
+import { initAuth, signIn, signOut, isSignedIn, getAccessToken, getName, getEmail } from './auth.js';
 import { loadLedger, lastAmountForStudent, addEntry, updateEntry, deleteEntry, addStudent, loadAccountSummary, updateOverallBalance } from './ledger.js';
 import { initTheme } from './theme.js';
 import { ICONS } from './icons.js';
@@ -94,7 +94,8 @@ function updateAuthUI() {
   els.signInBtn.hidden = signedIn;
   els.signOutBtn.hidden = !signedIn;
   els.signedInAs.hidden = !signedIn;
-  els.signedInAs.textContent = getEmail() || '';
+  els.signedInAs.textContent = getName() || '';
+  els.signedInAs.title = getEmail() || '';
   els.addEntryFab.hidden = !signedIn;
   renderAccountSummary();
   renderTxList();
@@ -433,6 +434,13 @@ function onClearFilters() {
 function wireEvents() {
   els.signInBtn.addEventListener('click', () => signIn(updateAuthUI));
   els.signOutBtn.addEventListener('click', () => signOut(updateAuthUI));
+  // title="" already shows the email on hover for mouse users; touch
+  // devices have no hover, so tapping the name shows the same email as a
+  // toast instead.
+  els.signedInAs.addEventListener('click', () => {
+    const email = getEmail();
+    if (email) showToast(email);
+  });
   els.addEntryFab.addEventListener('click', openDialog);
   els.closeDialogBtn.addEventListener('click', closeDialog);
   els.entryDialogBackdrop.addEventListener('click', (e) => { if (e.target === els.entryDialogBackdrop) closeDialog(); });
