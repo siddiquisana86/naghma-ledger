@@ -359,6 +359,8 @@ main {
   justify-content: center;
 }
 
+.fab[hidden] { display: none; }
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;
